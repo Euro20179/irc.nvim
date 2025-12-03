@@ -1,1 +1,17 @@
 = IRC Time =
+
+[WARNING]: this client is no where near complete.
+The only things that work currently are the motd, and sending/reciving messages
+
+== Usage
+
+Open a file/buffer called `irc://<server>`, eg `irc://irc.libera.chat`. This
+will open a system messages buffer, then to join a channel open a new buffer
+called `irc://##the-channel`, eg: `:e irc://\#\#bash`.
+
+Once the channel is joined, another buffer will be opened called
+`irc://>##the-channel`. This is the buffer in which you send messages. To send
+the message `:w` the buffer.
+
+To message a specific user, open a buffer called `irc://#the-user` (notice it
+has one hashtag)
