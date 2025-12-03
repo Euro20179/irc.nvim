@@ -39,8 +39,8 @@ end
 ---@param text string[]
 local function handle_chan_msg(user, text, out)
     user = vim.split(user, '!')[1]
-    user = vim.fn.slice(user, 1)
-    vim.fn.appendbufline(out, '$', '<' .. user .. '>: ' .. vim.fn.slice(table.concat(vim.list_slice(text, 4), ' '), 1))
+    user = string.sub(user, 2)
+    vim.fn.appendbufline(out, '$', '<' .. user .. '>: ' .. string.sub(table.concat(vim.list_slice(text, 4), ' '), 2))
 end
 
 local function handleLine(line)
@@ -55,6 +55,9 @@ local function handleLine(line)
     local user = data[1]
     local command = data[2]
     local channel = data[3]
+    if channel and vim.startswith(channel, ":") then
+        channel = string.sub(channel, 2)
+    end
 
     vim.schedule(function()
         local recv_chan = M.get_chan('recv', channel or '[system]')
@@ -73,7 +76,7 @@ local function handleLine(line)
         -- motd
         elseif command == '372' then
             recv_chan = M.get_chan('recv', '[system]')
-            local motd_line = vim.fn.slice(table.concat(vim.list_slice(data, 4), ' '), 2)
+            local motd_line = string.sub(table.concat(vim.list_slice(data, 4), ' '), 3)
             client.motd[#client.motd+1] = motd_line
             handle_motd(motd_line, recv_chan)
             return
@@ -153,18 +156,20 @@ function M.privmsg(channel, msg)
     handle_chan_msg(':' .. client.nick .. "!" .. client.user .. "@localhost", {'', '', '', ':' .. msg }, M.get_chan('recv', channel))
 end
 
-function M.join_and_make_buffers(channel, buffers)
-    M.join(channel)
+local function make_send_buffer(bufnr)
+    local buf = bufnr
 
-    local recvbuf = buffers.recv or vim.api.nvim_create_buf(true, false)
-    local sendbuf = buffers.send or vim.api.nvim_create_buf(true, false)
+    if vim.b[buf].irc_config_set ~= nil then
+        return
+    end
 
-    vim.api.nvim_buf_set_name(sendbuf, 'irc://>#' .. channel)
-    vim.api.nvim_buf_set_name(recvbuf, 'irc://#' .. channel)
+    vim.b[buf].irc_config_set = true
 
-    vim.bo[sendbuf].buftype = 'acwrite'
+    vim.api.nvim_set_option_value('buftype', 'acwrite', {
+        buf = buf
+    })
     vim.api.nvim_create_autocmd('BufWriteCmd', {
-        buffer = sendbuf,
+        buffer = buf,
         callback = function()
             local _, chan, is_send = M.parse_url(vim.api.nvim_buf_get_name(0))
             if is_send then
@@ -177,13 +182,6 @@ function M.join_and_make_buffers(channel, buffers)
             end
         end
     })
-
-    client.channel_bufs[channel] = {
-        send = sendbuf,
-        recv = recvbuf,
-    }
-
-    return recvbuf, sendbuf
 end
 
 function M.connect(url, systembuf)
@@ -197,6 +195,7 @@ function M.connect(url, systembuf)
     client.tcp:connect(domain, 6667, function(err)
         assert(not err, err)
 
+        math.randomseed(os.time(), os.clock())
         local name = 'guest' .. tostring(math.random(5000, 10000))
         M.nick(name)
         M.user(name, name)
@@ -254,21 +253,29 @@ function M.get_chan(ty, for_)
             send = vim.api.nvim_create_buf(true, false),
             recv = vim.api.nvim_create_buf(true, false)
         }
+        make_send_buffer(chans.send)
         client.channel_bufs[for_] = chans
         vim.api.nvim_buf_set_name(chans.send, 'irc://>#' .. for_)
         vim.api.nvim_buf_set_name(chans.recv, 'irc://#' .. for_)
+        vim.bo[chans.send].filetype = 'irc-chat'
+        vim.bo[chans.recv].filetype = 'irc-chat'
     end
+
     local chan = chans[ty]
+
     if chan == nil then
         chans[ty] = vim.api.nvim_create_buf(true, false)
         local name = 'irc://'
         if ty == 'send' then
             name = name .. '>'
+            make_send_buffer(chans[ty])
         end
         name = name .. '#' .. for_
         vim.api.nvim_buf_set_name(chans[ty], name)
+        vim.bo[chans[ty]].filetype = 'irc-chat'
     end
-    return chans and chans[ty] or nil
+
+    return chans[ty]
 end
 
 function M.motd()
