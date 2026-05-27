@@ -18,6 +18,7 @@ local client = {
     nick = "",
     user = "",
     realname = "",
+    domain = "",
 
     motd = {}
 }
@@ -191,6 +192,8 @@ function M.connect(url, systembuf)
 
     local domain, channel, _ = M.parse_url(url)
 
+    client.domain = domain
+
     local addrinfo = vim.uv.getaddrinfo(domain, nil, {
         family = "inet",
         socktype = "stream"
@@ -217,37 +220,25 @@ end
 
 function M.parse_url(url)
     if not vim.startswith(url, "irc://") then
-        error("URL must be in the form of irc://<server>, irc://#<user>, or irc://##<channel>")
+        error("URL must be in the form of irc://<server>, irc://<server>/[>]<user>, irc://<server>/[>]#<channel>")
     end
-
-    local data
 
     local rest = vim.fn.slice(url, 6)
 
-    local domain = nil
-    local channel = ''
-    local is_send = false
-    if vim.startswith(rest, '#') then
-        channel = vim.fn.slice(rest, 1)
-        domain = client.addr
-        goto done
-    elseif vim.startswith(rest, '>') then
-        rest = vim.fn.slice(rest, 1)
-        is_send = true
-        if vim.startswith(rest, '#') then
-            channel = vim.fn.slice(rest, 1)
-            domain = client.addr
-            goto done
-        end
+    local data = vim.split(rest, "/")
+    local domain = data[1]
+    local channel = data[2]
+
+    if channel == nil then
+        return domain, nil, false
     end
 
-    -- handle full url
+    local is_send = false
+    if vim.startswith(channel, '>') then
+        is_send = true
+        channel = vim.fn.slice(channel, 1)
+    end
 
-    data = vim.split(rest, '#')
-    domain = data[1]
-    channel = data[2]
-
-    ::done::
     return domain, channel, is_send
 end
 
@@ -270,8 +261,8 @@ function M.get_chan(ty, for_)
         })
         make_send_buffer(chans.send)
         client.channel_bufs[for_] = chans
-        vim.api.nvim_buf_set_name(chans.send, 'irc://>#' .. for_)
-        vim.api.nvim_buf_set_name(chans.recv, 'irc://#' .. for_)
+        vim.api.nvim_buf_set_name(chans.send, 'irc://' .. client.domain .. '/>' .. for_)
+        vim.api.nvim_buf_set_name(chans.recv, 'irc://' .. client.domain .. '/' .. for_)
         vim.bo[chans.send].filetype = 'irc-chat'
         vim.bo[chans.recv].filetype = 'irc-chat'
     end
@@ -280,12 +271,12 @@ function M.get_chan(ty, for_)
 
     if chan == nil then
         chans[ty] = vim.api.nvim_create_buf(true, false)
-        local name = 'irc://'
+        local name = 'irc://' .. client.domain .. '/'
         if ty == 'send' then
             name = name .. '>'
             make_send_buffer(chans[ty])
         end
-        name = name .. '#' .. for_
+        name = name .. for_
         vim.api.nvim_buf_set_name(chans[ty], name)
         vim.bo[chans[ty]].filetype = 'irc-chat'
     end
