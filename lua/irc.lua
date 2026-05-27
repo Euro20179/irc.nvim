@@ -191,8 +191,13 @@ function M.connect(url, systembuf)
 
     local domain, channel, _ = M.parse_url(url)
 
+    local addrinfo = vim.uv.getaddrinfo(domain, nil, {
+        family = "inet",
+        socktype = "stream"
+    })
+
     client.tcp = vim.uv.new_tcp()
-    client.tcp:connect(domain, 6667, function(err)
+    client.tcp:connect(addrinfo[1].addr, 6667, function(err)
         assert(not err, err)
 
         math.randomseed(os.time(), os.clock())
