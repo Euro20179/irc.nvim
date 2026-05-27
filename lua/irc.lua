@@ -265,6 +265,10 @@ function M.get_chan(ty, for_)
         vim.api.nvim_buf_set_name(chans.recv, 'irc://' .. client.domain .. '/' .. for_)
         vim.bo[chans.send].filetype = 'irc-chat'
         vim.bo[chans.recv].filetype = 'irc-chat'
+
+        local t = vim.api.nvim_open_tabpage(chans.recv, false, {})
+        local tw = vim.api.nvim_tabpage_get_win(t)
+        vim.api.nvim_open_win(chans.send, false, { split = 'below', win = tw })
     end
 
     local chan = chans[ty]
