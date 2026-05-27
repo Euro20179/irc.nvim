@@ -258,6 +258,16 @@ function M.get_chan(ty, for_)
             send = vim.api.nvim_create_buf(true, false),
             recv = vim.api.nvim_create_buf(true, false)
         }
+        vim.api.nvim_create_autocmd('BufDelete', {
+            buffer = chans.recv,
+            once = true,
+            callback = function()
+                send("PART " .. for_)
+                if vim.api.nvim_buf_is_valid(chans.send) then
+                    vim.api.nvim_buf_delete(chans.send, { force = true })
+                end
+            end
+        })
         make_send_buffer(chans.send)
         client.channel_bufs[for_] = chans
         vim.api.nvim_buf_set_name(chans.send, 'irc://>#' .. for_)
